@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GD API Tester</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: monospace; background: #111; color: #eee; padding: 1.5rem; }
+    h1 { font-size: 16px; font-weight: 500; margin-bottom: 1rem; color: #aaa; letter-spacing: 0.05em; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 1rem; }
+    .tab {
+      font-family: monospace; font-size: 12px; padding: 6px 16px;
+      border: 0.5px solid #333; border-radius: 8px; cursor: pointer;
+      background: transparent; color: #666;
+    }
+    .tab:hover { background: #1a1a1a; color: #aaa; }
+    .tab.active { background: #1a1a1a; color: #eee; border-color: #555; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .panel { background: #1a1a1a; border: 0.5px solid #333; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+    .panel-title { font-size: 11px; font-weight: 500; color: #666; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    input[type=text] {
+      flex: 1; min-width: 120px; font-family: monospace; font-size: 13px;
+      background: #222; border: 0.5px solid #444; border-radius: 8px;
+      color: #eee; padding: 8px 12px; outline: none;
+    }
+    input[type=text]:focus { border-color: #666; }
+    button {
+      font-family: monospace; font-size: 12px; white-space: nowrap;
+      background: transparent; border: 0.5px solid #555; border-radius: 8px;
+      color: #ccc; padding: 8px 14px; cursor: pointer;
+    }
+    button:hover { background: #222; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary { border-color: #5a9e5a; color: #5a9e5a; }
+    button.primary:hover { background: #1a2e1a; }
+
+    .tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 8px; }
+    .tag-jsdelivr { background: #1a2e1a; color: #5a9e5a; }
+    .tag-gd { background: #2e1a1a; color: #c07060; }
+    .tag-dl { background: #1e1e2e; color: #7080c0; text-decoration: none; cursor: pointer; display: inline-flex; margin-top: 6px; }
+
+    .log-area {
+      background: #0e0e0e; border-radius: 8px; padding: 12px;
+      font-size: 12px; font-family: monospace; color: #ccc;
+      min-height: 60px; max-height: 240px; overflow-y: auto; line-height: 1.7;
+    }
+    .log-line { display: flex; gap: 8px; align-items: flex-start; padding: 1px 0; border-bottom: 0.5px solid #1a1a1a; }
+    .log-line:last-child { border-bottom: none; }
+    .log-ts { color: #444; flex-shrink: 0; font-size: 10px; padding-top: 2px; }
+    .log-msg { flex: 1; word-break: break-all; }
+    .log-ok   { color: #5a9e5a; }
+    .log-warn { color: #c09040; }
+    .log-err  { color: #c04040; }
+
+    .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-top: 1rem; }
+    .stat { background: #222; border-radius: 8px; padding: 10px 12px; }
+    .stat-label { font-size: 11px; color: #555; margin-bottom: 4px; }
+    .stat-val { font-size: 13px; font-weight: 500; color: #ddd; word-break: break-all; }
+    audio { width: 100%; margin-top: 8px; }
+
+    .level-list { display: flex; flex-direction: column; gap: 6px; margin-top: 1rem; }
+    .level-row {
+      display: flex; align-items: center; gap: 10px;
+      background: #222; border-radius: 8px; padding: 8px 12px;
+      border: 0.5px solid #2a2a2a;
+    }
+    .level-row:hover { border-color: #444; }
+    .level-check { accent-color: #5a9e5a; width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
+    .level-info { flex: 1; min-width: 0; }
+    .level-name { font-size: 13px; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .level-meta { font-size: 11px; color: #555; margin-top: 2px; }
+    .level-stars { font-size: 11px; color: #c09040; flex-shrink: 0; }
+    .level-diff { font-size: 10px; padding: 2px 7px; border-radius: 6px; background: #1a1a1a; color: #666; flex-shrink: 0; }
+
+    .pager { display: flex; gap: 8px; align-items: center; margin-top: 1rem; }
+    .pager-info { font-size: 12px; color: #555; flex: 1; }
+
+    .bulk-bar {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      background: #0e0e0e; border-radius: 8px; padding: 10px 12px;
+      margin-top: 1rem; font-size: 12px; color: #666;
+    }
+    .bulk-count { color: #5a9e5a; font-weight: 500; }
+
+    .progress-bar-wrap { background: #222; border-radius: 6px; height: 6px; margin-top: 8px; overflow: hidden; }
+    .progress-bar { background: #5a9e5a; height: 100%; width: 0%; transition: width 0.2s; border-radius: 6px; }
+
+    select {
+      font-family: monospace; font-size: 12px;
+      background: #222; border: 0.5px solid #444; border-radius: 8px;
+      color: #eee; padding: 6px 10px; outline: none; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>GD API tester</h1>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('levels', this)">levels</button>
+  <button class="tab" onclick="switchTab('songs', this)">songs</button>
+  <button class="tab" onclick="switchTab('sfx', this)">sfx</button>
+  <button class="tab" onclick="switchTab('rated', this)">rated browser</button>
+</div>
+
+<!-- LEVELS -->
+<div id="tab-levels" class="tab-content active">
+  <div class="panel">
+    <div class="panel-title">Level downloader</div>
+    <div class="row">
+      <input type="text" id="levelIds" placeholder="level ids: 118509879, 456, 789..." />
+      <button onclick="downloadLevels()">fetch levels ↗</button>
+      <button class="primary" onclick="downloadLevelsZip()">↓ zip all fetched</button>
+    </div>
+    <div id="levelResults" class="results-grid"></div>
+    <div id="levelAudioArea"></div>
+  </div>
+</div>
+
+<!-- SONGS -->
+<div id="tab-songs" class="tab-content">
+  <div class="panel">
+    <div class="panel-title">Song downloader</div>
+    <div class="row">
+      <input type="text" id="songIds" placeholder="newgrounds ids: 467339, 1001..." />
+      <button onclick="downloadSongs()">fetch songs ↗</button>
+<button class="primary" onclick="downloadSongsZip()">↓ zip all fetched</button>
+    </div>
+    <div id="songResults"></div>
+  </div>
+</div>
+
+<!-- SFX -->
+<div id="tab-sfx" class="tab-content">
+  <div class="panel">
+    <div class="panel-title">SFX downloader</div>
+    <div class="row">
+      <input type="text" id="sfxIds" placeholder="sfx ids: 1, 10, 22..." />
+      <button onclick="downloadSfx()">fetch sfx ↗</button>
+    </div>
+    <div id="sfxResults"></div>
+  </div>
+</div>
+
+<!-- RATED BROWSER -->
+<div id="tab-rated" class="tab-content">
+  <div class="panel">
+    <div class="panel-title">Rated levels browser — via GDBrowser API</div>
+    <div class="row">
+      <select id="ratedFilter">
+        <option value="rated=1">all rated</option>
+        <option value="featured=1">featured</option>
+        <option value="epic=1">epic</option>
+        <option value="demon=1&rated=1">demons</option>
+        <option value="auto=1&rated=1">auto</option>
+      </select>
+      <select id="ratedDiff">
+        <option value="">any difficulty</option>
+        <option value="&diff=1">easy</option>
+        <option value="&diff=2">normal</option>
+        <option value="&diff=3">hard</option>
+        <option value="&diff=4">harder</option>
+        <option value="&diff=5">insane</option>
+        <option value="&diff=-2">demon</option>
+      </select>
+      <button onclick="loadRatedPage(0)">search ↗</button>
+    </div>
+
+    <div id="ratedList" class="level-list">
+      <div style="color:#444;font-size:12px;margin-top:8px;">press search to load levels.</div>
+    </div>
+
+    <div class="pager">
+      <button onclick="ratedPrev()" id="ratedPrevBtn" disabled>← prev</button>
+      <span class="pager-info" id="ratedPageInfo">—</span>
+      <button onclick="ratedNext()" id="ratedNextBtn" disabled>next →</button>
+    </div>
+
+    <div class="bulk-bar">
+      <span>selected: <span class="bulk-count" id="selCount">0</span></span>
+      <button onclick="selectAll()">select all</button>
+      <button onclick="deselectAll()">deselect all</button>
+      <button class="primary" onclick="downloadSelected()">↓ download selected as .zip</button>
+      <button onclick="copySelectedIds()">copy ids</button>
+    </div>
+    <div class="progress-bar-wrap" id="ratedProgressWrap" style="display:none;">
+      <div class="progress-bar" id="ratedProgressBar"></div>
+    </div>
+    <div id="ratedStatus" style="font-size:11px;color:#555;margin-top:6px;min-height:16px;"></div>
+  </div>
+</div>
+
+<!-- LOG -->
+<div class="panel">
+  <div class="panel-title">Log</div>
+  <div class="log-area" id="logArea"><div style="color:#444;font-size:12px;">ready.</div></div>
+</div>
+
+<script>
+// ── CONFIG ─────────────────────────────────────────────────────────────
+window._gdProxyUrl  = "https://gd-proxy.gmdc.workers.dev";
+const JSDELIVR_BASE = "https://cdn.jsdelivr.net/gh/YOUR_USER/YOUR_REPO/levels";
+const CORS_PROXY    = "https://proxy.corsfix.com/?";
+const GDBROWSER     = "https://gdbrowser.com/api";
+// ──────────────────────────────────────────────────────────────────────
+
+const _fetchedLevels = {};   // id -> parsed, for zip-all
+const _fetchedSongs = {}; // id -> { blob, title }
+let _ratedPage = 0;
+
+// ── TABS ──────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(el => el.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+  btn.classList.add("active");
+}
+
+// ── LOG ───────────────────────────────────────────────────────────────
+function ts() { return new Date().toTimeString().slice(0, 8); }
+function log(msg, type) {
+  const area = document.getElementById("logArea");
+  const ph = area.querySelector("div");
+  if (ph && ph.style.color === "#444") ph.remove();
+  const line = document.createElement("div");
+  line.className = "log-line";
+  line.innerHTML = `<span class="log-ts">${ts()}</span><span class="log-msg ${type ? 'log-'+type : ''}">${msg}</span>`;
+  area.appendChild(line);
+  area.scrollTop = area.scrollHeight;
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────
+function parseGDResponse(text) {
+  const parts = text.split(":");
+  const data = {};
+  for (let i = 0; i < parts.length - 1; i += 2) data[parts[i]] = parts[i + 1];
+  return data;
+}
+function parseIds(str) {
+  return str.split(/[\s,]+/).map(s => s.replace(/\D/g, "").trim()).filter(Boolean);
+}
+function makeSourceBadge(source) {
+  return `<span class="tag ${source === 'jsdelivr' ? 'tag-jsdelivr' : 'tag-gd'}">${source === 'jsdelivr' ? '⬡ jsDelivr' : '◎ GD servers'}</span>`;
+}
+
+// ── CORE LEVEL FETCH (jsdelivr → proxy) ──────────────────────────────
+async function fetchLevel(id) {
+  try {
+    const r = await fetch(`${JSDELIVR_BASE}/${id}.json?t=${Date.now()}`);
+    if (r.ok) {
+      const txt = await r.text();
+      if (txt && txt.trim().startsWith("{")) {
+        return { parsed: JSON.parse(txt), source: "jsdelivr" };
+      }
+    }
+    throw new Error("miss");
+  } catch (_) {}
+
+  const res = await fetch(`${window._gdProxyUrl}/downloadGJLevel22.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `levelID=${id}&secret=Wmfd2893gb7`
+  });
+  const text = await res.text();
+  if (!text || text === "-1" || !text.includes(":")) throw new Error("level not found");
+  return { parsed: parseGDResponse(text), source: "gd" };
+}
+
+// ── LEVEL CARD ────────────────────────────────────────────────────────
+function renderLevelCard(parsed, id, source, grid) {
+  const name   = parsed["2"] || `Level ${id}`;
+  const songId = parsed["35"] || "0";
+  const stars  = parsed["18"] || "?";
+  const card = document.createElement("div");
+  card.className = "stat";
+  card.innerHTML = `
+    <div class="stat-label">name</div><div class="stat-val">${name}</div>
+    <div class="stat-label" style="margin-top:6px;">id</div><div class="stat-val">${parsed["1"] || id}</div>
+    <div class="stat-label" style="margin-top:6px;">stars / song</div><div class="stat-val">${stars} ⭐ / #${songId}</div>
+    <div style="margin-top:8px;">${makeSourceBadge(source)}</div>
+  `;
+  grid.appendChild(card);
+
+  const blob = new Blob([JSON.stringify(parsed, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `level_${id}.json`;
+  a.className = "tag tag-dl"; a.innerText = `↓ level_${id}.json`;
+  grid.appendChild(a);
+}
+
+// ── DOWNLOAD LEVELS (manual) ──────────────────────────────────────────
+async function downloadLevels() {
+  const ids = parseIds(document.getElementById("levelIds").value);
+  if (!ids.length) { log("enter at least one level id", "err"); return; }
+  document.getElementById("levelResults").innerHTML = "";
+  document.getElementById("levelAudioArea").innerHTML = "";
+
+  for (const id of ids) {
+    log(`fetching level ${id}...`);
+    try {
+      const { parsed, source } = await fetchLevel(id);
+      _fetchedLevels[id] = parsed;
+      log(`level ${id} — ${source === 'jsdelivr' ? 'jsDelivr' : 'GD servers'}`, "ok");
+      renderLevelCard(parsed, id, source, document.getElementById("levelResults"));
+
+      const songId = parsed["35"] || "0";
+      if (songId && songId !== "0") {
+        log(`fetching song #${songId}...`);
+        try {
+          const audioEl = await fetchSongAudio(songId);
+          const w = document.createElement("div");
+          w.style.marginTop = "10px";
+          w.innerHTML = `<div style="font-size:11px;color:#555;margin-bottom:4px;">song #${songId} for "${parsed["2"] || id}"</div>`;
+          w.appendChild(audioEl);
+          document.getElementById("levelAudioArea").appendChild(w);
+        } catch (se) { log(`song ${songId} failed: ${se.message}`, "warn"); }
+      }
+    } catch (e) { log(`level ${id} — failed: ${e.message}`, "err"); }
+  }
+}
+
+// ── ZIP ALL FETCHED ───────────────────────────────────────────────────
+async function downloadLevelsZip() {
+  const keys = Object.keys(_fetchedLevels);
+  if (!keys.length) { log("no levels fetched yet", "err"); return; }
+  log(`zipping ${keys.length} level(s)...`);
+  const zip = new JSZip();
+  const folder = zip.folder("levels");
+  for (const id of keys) folder.file(`level_${id}.json`, JSON.stringify(_fetchedLevels[id], null, 2));
+  const blob = await zip.generateAsync({ type: "blob" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "gd_levels.zip"; a.click();
+  log(`downloaded gd_levels.zip with ${keys.length} file(s)`, "ok");
+}
+async function downloadSongsZip() {
+  const keys = Object.keys(_fetchedSongs);
+  if (!keys.length) { log("no songs fetched yet", "err"); return; }
+
+  log(`zipping ${keys.length} song(s)...`);
+
+  const zip = new JSZip();
+  const folder = zip.folder("songs");
+
+  for (const id of keys) {
+    const { blob, title } = _fetchedSongs[id];
+    const safeName = (title || `song_${id}`)
+      .replace(/[^\w\d]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    folder.file(`${id}.mp3`, blob);
+  }
+
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = "gd_songs.zip";
+  a.click();
+
+  log(`downloaded gd_songs.zip with ${keys.length} file(s)`, "ok");
+}
+// ── SONGS ─────────────────────────────────────────────────────────────
+async function fetchSongAudio(id) {
+  const res = await fetch(`${window._gdProxyUrl}/getGJSongInfo.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `songID=${id}&secret=Wmfd2893gb7`
+  });
+  const text = await res.text();
+  if (!text || text === "-1") throw new Error("song not found");
+  const parts = text.split("~|~");
+  const map = {};
+  for (let i = 0; i + 1 < parts.length; i += 2) map[parts[i]] = parts[i + 1];
+  const songUrl = decodeURIComponent((map["10"] || "").trim());
+  const title   = (map["2"] || `Song #${id}`).replace(/:$/, "").trim();
+  const artist  = (map["4"] || "Unknown").replace(/:$/, "").trim();
+  log(`song: "${title}" by ${artist}`, "ok");
+
+  // ── try 3 routes: direct → corsfix → GD proxy ─────────────────────
+  let blob = null;
+  try {
+    const r = await fetch(songUrl);
+    if (r.ok) { blob = await r.blob(); log(`song ${id} — direct fetch`, "ok"); }
+    else throw new Error("direct failed");
+  } catch (_) {
+    try {
+      const r = await fetch(`${CORS_PROXY}${songUrl}`);
+      if (r.ok) { blob = await r.blob(); log(`song ${id} — via corsfix`, "ok"); }
+      else throw new Error(`corsfix ${r.status}`);
+    } catch (_2) {
+      const r = await fetch(`${window._gdProxyUrl}/audio-proxy?url=${encodeURIComponent(songUrl)}`);
+      if (!r.ok) throw new Error(`all proxies failed (${r.status})`);
+      blob = await r.blob();
+      log(`song ${id} — via GD proxy`, "ok");
+    }
+  }
+
+ return { blob, title };
+}
+
+async function downloadSongs() {
+  const ids = parseIds(document.getElementById("songIds").value);
+  if (!ids.length) { log("enter at least one song id", "err"); return; }
+
+  document.getElementById("songResults").innerHTML = "";
+
+  for (const id of ids) {
+    log(`fetching song ${id}...`);
+    try {
+      const { blob, title } = await fetchSongAudio(id);
+
+      // store for zip
+      _fetchedSongs[id] = { blob, title };
+
+      const el = document.createElement("audio");
+      el.controls = true;
+      el.src = URL.createObjectURL(blob);
+
+      const w = document.createElement("div");
+      w.style.marginTop = "10px";
+      w.innerHTML = `<div style="font-size:11px;color:#555;margin-bottom:4px;">${title} (#${id})</div>`;
+      w.appendChild(el);
+
+      document.getElementById("songResults").appendChild(w);
+
+      log(`song ${id} ready`, "ok");
+    } catch (e) {
+      log(`song ${id} failed: ${e.message}`, "err");
+    }
+  }
+}
+
+// ── SFX ───────────────────────────────────────────────────────────────
+async function downloadSfx() {
+  const ids = parseIds(document.getElementById("sfxIds").value);
+  if (!ids.length) { log("enter at least one sfx id", "err"); return; }
+  document.getElementById("sfxResults").innerHTML = "";
+  for (const id of ids) {
+    log(`fetching sfx ${id}...`);
+    try {
+      const res = await fetch(`${CORS_PROXY}https://geometrydashfiles.b-cdn.net/sfx/s${id}.ogg`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const el = document.createElement("audio");
+      el.controls = true; el.src = URL.createObjectURL(await res.blob());
+      const w = document.createElement("div");
+      w.style.marginTop = "10px";
+      w.innerHTML = `<div style="font-size:11px;color:#555;margin-bottom:4px;">sfx #${id}</div>`;
+      w.appendChild(el);
+      document.getElementById("sfxResults").appendChild(w);
+      log(`sfx ${id} — loaded`, "ok");
+    } catch (e) { log(`sfx ${id} failed: ${e.message}`, "err"); }
+  }
+}
+
+// ── RATED BROWSER ─────────────────────────────────────────────────────
+async function loadRatedPage(page) {
+  _ratedPage = page;
+  const filter = document.getElementById("ratedFilter").value;
+  const diff   = document.getElementById("ratedDiff").value;
+  const url = `${GDBROWSER}/search/*?${filter}${diff}&page=${page}&count=20`;
+  log(`loading rated page ${page + 1}...`);
+
+  const list = document.getElementById("ratedList");
+  list.innerHTML = `<div style="color:#444;font-size:12px;margin-top:8px;">loading...</div>`;
+  document.getElementById("ratedPrevBtn").disabled = true;
+  document.getElementById("ratedNextBtn").disabled = true;
+  document.getElementById("ratedPageInfo").textContent = `page ${page + 1}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`gdbrowser returned ${res.status}`);
+    const data = await res.json();
+
+    if (!Array.isArray(data) || !data.length) {
+      list.innerHTML = `<div style="color:#555;font-size:12px;margin-top:8px;">no results.</div>`;
+      log("no results", "warn"); return;
+    }
+
+    list.innerHTML = "";
+    data.forEach(lvl => {
+      const id = String(lvl.id || lvl.levelID || "?");
+      const row = document.createElement("div");
+      row.className = "level-row";
+      row.innerHTML = `
+        <input type="checkbox" class="level-check rated-check" data-id="${id}" onchange="updateSelCount()">
+        <div class="level-info">
+          <div class="level-name">${lvl.name || "Unknown"}</div>
+          <div class="level-meta">by ${lvl.author || "?"} · id: ${id}</div>
+        </div>
+        <span class="level-stars">${lvl.stars || 0} ⭐</span>
+        <span class="level-diff">${lvl.difficulty || "?"}</span>
+      `;
+      list.appendChild(row);
+    });
+
+    document.getElementById("ratedPrevBtn").disabled = page === 0;
+    document.getElementById("ratedNextBtn").disabled = data.length < 20;
+    updateSelCount();
+    log(`loaded ${data.length} levels (page ${page + 1})`, "ok");
+  } catch (e) {
+    list.innerHTML = `<div style="color:#c04040;font-size:12px;margin-top:8px;">error: ${e.message}</div>`;
+    log(`rated levels error: ${e.message}`, "err");
+  }
+}
+
+function ratedPrev() { if (_ratedPage > 0) loadRatedPage(_ratedPage - 1); }
+function ratedNext() { loadRatedPage(_ratedPage + 1); }
+
+function getCheckedIds() {
+  return [...document.querySelectorAll(".rated-check:checked")].map(el => el.dataset.id);
+}
+function updateSelCount() {
+  document.getElementById("selCount").textContent = getCheckedIds().length;
+}
+function selectAll() {
+  document.querySelectorAll(".rated-check").forEach(el => el.checked = true);
+  updateSelCount();
+}
+function deselectAll() {
+  document.querySelectorAll(".rated-check").forEach(el => el.checked = false);
+  updateSelCount();
+}
+function copySelectedIds() {
+  const ids = getCheckedIds();
+  if (!ids.length) { log("no levels selected", "warn"); return; }
+  navigator.clipboard.writeText(ids.join(", "));
+  log(`copied ${ids.length} ids to clipboard`, "ok");
+}
+
+async function downloadSelected() {
+  const ids = getCheckedIds();
+  if (!ids.length) { log("select at least one level", "err"); return; }
+
+  const progressWrap = document.getElementById("ratedProgressWrap");
+  const progressBar  = document.getElementById("ratedProgressBar");
+  const statusEl     = document.getElementById("ratedStatus");
+
+  progressWrap.style.display = "block";
+  progressBar.style.width = "0%";
+  statusEl.textContent = "";
+
+  log(`downloading ${ids.length} selected level(s)...`);
+  const zip = new JSZip();
+  const folder = zip.folder("rated_levels");
+  let done = 0;
+
+  for (const id of ids) {
+    statusEl.textContent = `fetching ${id}... (${done + 1}/${ids.length})`;
+    try {
+      const { parsed, source } = await fetchLevel(id);
+      folder.file(`level_${id}.json`, JSON.stringify(parsed, null, 2));
+      log(`level ${id} — ${source === 'jsdelivr' ? 'jsDelivr' : 'GD servers'}`, "ok");
+    } catch (e) { log(`level ${id} failed: ${e.message}`, "err"); }
+    done++;
+    progressBar.style.width = `${Math.round((done / ids.length) * 100)}%`;
+    await new Promise(r => setTimeout(r, 350)); // be kind to GD servers
+  }
+
+  statusEl.textContent = "generating zip...";
+  const blob = await zip.generateAsync({ type: "blob" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "rated_levels.zip"; a.click();
+  statusEl.textContent = `done — downloaded ${done} level(s).`;
+  log(`rated_levels.zip — ${done} file(s)`, "ok");
+}
+</script>
+<!-- Code injected by live-server -->
+<script>
+	// <![CDATA[  <-- For SVG support
+	if ('WebSocket' in window) {
+		(function () {
+			function refreshCSS() {
+				var sheets = [].slice.call(document.getElementsByTagName("link"));
+				var head = document.getElementsByTagName("head")[0];
+				for (var i = 0; i < sheets.length; ++i) {
+					var elem = sheets[i];
+					var parent = elem.parentElement || head;
+					parent.removeChild(elem);
+					var rel = elem.rel;
+					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+					}
+					parent.appendChild(elem);
+				}
+			}
+			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+			var address = protocol + window.location.host + window.location.pathname + '/ws';
+			var socket = new WebSocket(address);
+			socket.onmessage = function (msg) {
+				if (msg.data == 'reload') window.location.reload();
+				else if (msg.data == 'refreshcss') refreshCSS();
+			};
+			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+				console.log('Live reload enabled.');
+				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+			}
+		})();
+	}
+	else {
+		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+	}
+	// ]]>
+</script>
+</body>
+</html>
